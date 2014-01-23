@@ -3,6 +3,7 @@ package org.openmrs.module.htmlformentry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -347,23 +348,61 @@ public class FormEntryContext {
 		}
 		guessingInd = false;
 		existingObsInGroups = new LinkedHashMap<Obs, Set<Obs>>();
-		if (encounter != null)
-			setupExistingObsInGroups(encounter.getObsAtTopLevel(false));
+
+		if (encounter != null) {
+			setupExistingObsInGroups(sortObsGroupings(encounter.getObsAtTopLevel(false)));
+		}
 	}
-    
-    /**
-     * 
-     * Sets obs associated with an obs groups in existing obs groups.
-     * 
-     * @param oSet the obsGroup to add to existingObsInGroups
-     */     
-    public void setupExistingObsInGroups(Set<Obs> oSet){
-        for (Obs parent : oSet)       
-            if (parent.isObsGrouping()){
-                existingObsInGroups.put(parent, parent.getGroupMembers());
-                setupExistingObsInGroups(parent.getGroupMembers());
-            }    
-    }
+
+	/**
+	 * Sets obs associated with an obs groups in existing obs groups.
+	 * @param obss the obsGroup to add to existingObsInGroups
+	 */
+	public void setupExistingObsInGroups(List<Obs> obss){
+		for (Obs parent : obss) {
+			if (parent.isObsGrouping()){
+				existingObsInGroups.put(parent, parent.getGroupMembers());
+				setupExistingObsInGroups(sortObsGroupings(parent.getGroupMembers()));
+			}
+		}
+	}
+
+	/**
+	 * Utility method to sort a set of obs groupings by any contained date obs values
+	 * @param obss the obs groupings to sort
+	 * @return the sorted obs
+	 */
+	protected List<Obs> sortObsGroupings(Set<Obs> obss) {
+		List<Obs> sorted = new ArrayList<Obs>(obss);
+		Collections.sort(sorted, new Comparator<Obs>() {
+			@Override
+			public int compare(Obs obs1, Obs obs2) {
+				Date date1 = findDateObsMemberValue(obs1);
+				Date date2 = findDateObsMemberValue(obs2);
+				return OpenmrsUtil.compareWithNullAsLatest(date1, date2);
+			}
+		});
+		return sorted;
+	}
+
+	/**
+	 * Utility method to find a date obs value within an obs grouping
+	 * @param obs the obs grouping
+	 * @return the date value or null
+	 */
+	protected Date findDateObsMemberValue(Obs obs) {
+		Date date = null;
+
+		if (obs.hasGroupMembers()) {
+			for (Obs o : obs.getGroupMembers()) {
+				if (o.getValueDatetime() != null) {
+					return o.getValueDatetime();
+				}
+			}
+		}
+
+		return date;
+	}
             
      /**
       * Removes an Obs or ObsGroup of the relevant Concept from existingObs, and returns it. Use this version
